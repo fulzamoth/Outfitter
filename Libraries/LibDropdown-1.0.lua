@@ -1,10 +1,5 @@
--- This library has been modified and so I've changed the major name to use an MC suffix. Changes are:
--- * Added support for a color parameter on items to tint the text
--- * Added an optional cleanup function to menus so their owner can be notified if they're released
--- * Added support for items with an icon
-
-local MAJOR = "LibDropdownMC-1.0"
-local MINOR = 2
+local MAJOR = "LibDropdown-1.0"
+local MINOR = 3
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
@@ -62,8 +57,7 @@ local openMenu
 
 local noop = lib.noop or function() end
 lib.noop = noop
-
-local new, newHash, newSet, del
+local new, del = lib.new, lib.del
 if not lib.new then
 	local list = setmetatable({}, {__mode='k'})
 	function new(...)
@@ -90,16 +84,25 @@ if not lib.new then
 	end
 	lib.new, lib.del = new, del
 end
+new, del = lib.new, lib.del
 
 -- Make the frame match the tooltip
 local function InitializeFrame(frame)
-	local backdrop = GameTooltip:GetBackdrop()
+	if TooltipBackdropTemplateMixin then
+		frame.layoutType = GameTooltip.layoutType
+		if GameTooltip.layoutType then
+			frame.NineSlice:SetCenterColor(GameTooltip.NineSlice:GetCenterColor())
+			frame.NineSlice:SetBorderColor(GameTooltip.NineSlice:GetBorderColor())
+		end
+	else
+		local backdrop = GameTooltip:GetBackdrop()
 
-	frame:SetBackdrop(backdrop)
+		frame:SetBackdrop(backdrop)
 
-	if backdrop then
-		frame:SetBackdropColor(GameTooltip:GetBackdropColor())
-		frame:SetBackdropBorderColor(GameTooltip:GetBackdropBorderColor())
+		if backdrop then
+			frame:SetBackdropColor(GameTooltip:GetBackdropColor())
+			frame:SetBackdropBorderColor(GameTooltip:GetBackdropBorderColor())
+		end
 	end
 	frame:SetScale(GameTooltip:GetScale())
 end
@@ -137,7 +140,7 @@ local function AcquireSlider()
 		return frame
 	end
 
-	local frame = CreateFrame("Slider", nil, UIParent)
+	local frame = CreateFrame("Slider", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
 	frame:SetWidth(10)
 	frame:SetHeight(150)
 	frame:SetOrientation("VERTICAL")
@@ -316,7 +319,9 @@ end
 -- Pool methods
 local frameCount = 0
 function NewDropdownFrame()
-	local frame = CreateFrame("Frame", "LibDropdownFrame" .. frameCount, UIParent, BackdropTemplateMixin and "BackdropTemplate")
+	local template = (TooltipBackdropTemplateMixin and "TooltipBackdropTemplate") or (BackdropTemplateMixin and "BackdropTemplate")
+
+	local frame = CreateFrame("Frame", "LibDropdownFrame" .. frameCount, UIParent, template)
 	frameCount = frameCount + 1
 	frame:SetPoint("CENTER", UIParent, "CENTER")
 	frame:SetWidth(10)
@@ -370,7 +375,7 @@ do
 	local function click(self)
 		if self.OnClick and self.clickable then
 			self.OnClick(self)
-			PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+			PlaySound(856)
 			self:GetParent():GetRoot():Refresh()
 		end
 	end
@@ -549,11 +554,6 @@ function ReleaseFrame(f)
 		openMenu = nil
 	end
 	if f.released then return end
-
-	if f.cleanup then
-		f.cleanup()
-	end
-
 	f.released = true
 	f.data = nil
 	f.dataname = nil
@@ -645,11 +645,6 @@ do
 		b.option = v
 		b.dataname = k
 		b.refresh = grefresh
-
-		-- Tint with a color (mundocani)
-		if v.color then
-			b.text:SetTextColor(v.color.r, v.color.g, v.color.b, v.color.a)
-		end
 		return b
 	end
 
@@ -740,15 +735,6 @@ do
 			else
 				self:Enable()
 			end
-		end
-		if self.data.icon then
-			self.swatch:Show()
-			self.swatch.tex:Hide()
-			self.swatch:SetNormalTexture(self.data.icon)
-		else
-			self.swatch:Hide()
-			self.swatch.tex:Show()
-			self.swatch:SetNormalTexture([[Interface\ChatFrame\ChatFrameColorSwatch]])
 		end
 		return isDisabled
 	end
